@@ -40,6 +40,13 @@ async function getGraphJson(url: string, accessToken: string, params: Record<str
   return data
 }
 
+/** Resolve the configured drive to its canonical /drives/{drive-id} endpoint. */
+export async function getDriveApi(accessToken: string): Promise<string> {
+  const drive = await getGraphJson(apiConfig.driveApi, accessToken, {})
+  if (typeof drive?.id !== 'string') throw new Error('Microsoft Graph did not return a drive ID.')
+  return `https://graph.microsoft.com/v1.0/drives/${drive.id}`
+}
+
 /**
  * Encode the path of the file relative to the base directory
  *
@@ -155,7 +162,8 @@ export async function checkAuthRoute(
   }
 
   try {
-    const token = await axios.get(`${apiConfig.driveApi}/root${encodePath(authTokenPath)}`, {
+    const driveApi = await getDriveApi(accessToken)
+    const token = await axios.get(`${driveApi}/root${encodePath(authTokenPath)}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
       params: {
         select: '@microsoft.graph.downloadUrl,file',
@@ -253,13 +261,14 @@ export default async function handler(req: NextRequest): Promise<Response> {
   }
 
   const requestPath = encodePath(cleanPath)
-  // Handle response from OneDrive API
-  const requestUrl = `${apiConfig.driveApi}/root${requestPath}`
   // Whether path is root, which requires some special treatment
   const isRoot = requestPath === ''
 
   // Querying current path identity (file or folder) and follow up query childrens in folder
   try {
+    const driveApi = await getDriveApi(accessToken)
+    // Handle response from OneDrive API
+    const requestUrl = `${driveApi}/root${requestPath}`
     const identityData = await getGraphJson(requestUrl, accessToken, {
       $select: 'name,size,id,lastModifiedDateTime,folder,file,video,image',
     })
