@@ -16,8 +16,9 @@ module.exports = {
   // The name of your website. Present alongside your icon.
   title: "JohnBear",
 
-  // The folder that you are to share publicly with onedrive-cf-index-ng. Use '/' if you want to share your root folder.
-  baseDirectory: process.env.BASE_DIRECTORY || '/Publico',
+  // Relative to the SharePoint "Shared Documents" library: Grupo / Documentos / Pública.
+  // Use '/' only if the entire library should be exposed.
+  baseDirectory: process.env.BASE_DIRECTORY || '/Pública',
 
   // [OPTIONAL] This represents the maximum number of items that one directory lists, pagination supported.
   // Do note that this is limited up to 200 items by the upstream OneDrive API.
