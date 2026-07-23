@@ -83,8 +83,8 @@ export async function requestTokenWithAuthCode(
 // Verify the identity of the user with the access token and compare it with the userPrincipalName
 // in the Microsoft Graph API. If the userPrincipalName matches, proceed with token storing.
 export async function getAuthPersonInfo(accessToken: string) {
-  const profileApi = apiConfig.driveApi.replace('/drive', '')
-  return axios.get(profileApi, {
+  // File requests use the configured SharePoint drive, but OAuth identity always comes from /me.
+  return axios.get('https://graph.microsoft.com/v1.0/me', {
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
