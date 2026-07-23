@@ -15,6 +15,32 @@ const basePath = pathPosix.resolve('/', siteConfig.baseDirectory)
 const clientSecret = revealObfuscatedToken(apiConfig.obfuscatedClientSecret)
 
 /**
+ * Read JSON from Microsoft Graph using the Workers-native fetch implementation.
+ * This preserves Graph's error body and HTTP status in Cloudflare Pages, where
+ * redaxios can otherwise surface an empty error object.
+ */
+async function getGraphJson(url: string, accessToken: string, params: Record<string, string | number | undefined>) {
+  const graphUrl = new URL(url)
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) graphUrl.searchParams.set(key, value.toString())
+  }
+
+  const response = await fetch(graphUrl.toString(), {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  const body = await response.text()
+  let data: any = body
+  try {
+    data = body === '' ? null : JSON.parse(body)
+  } catch {
+    // Microsoft Graph normally returns JSON. Keep a non-JSON body for diagnostics.
+  }
+
+  if (!response.ok) throw { status: response.status, data }
+  return data
+}
+
+/**
  * Encode the path of the file relative to the base directory
  *
  * @param path Relative path of the file to the base directory
@@ -231,24 +257,16 @@ export default async function handler(req: NextRequest): Promise<Response> {
 
   // Querying current path identity (file or folder) and follow up query childrens in folder
   try {
-    const { data: identityData } = await axios.get(requestUrl, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      params: {
-        select: 'name,size,id,lastModifiedDateTime,folder,file,video,image',
-      },
+    const identityData = await getGraphJson(requestUrl, accessToken, {
+      $select: 'name,size,id,lastModifiedDateTime,folder,file,video,image',
     })
 
     if ('folder' in identityData) {
-      const { data: folderData } = await axios.get(`${requestUrl}${isRoot ? '' : ':'}/children`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        params: {
-          ...{
-            select: 'name,size,id,lastModifiedDateTime,folder,file,video,image',
-            $top: siteConfig.maxItems,
-          },
-          ...(next ? { $skipToken: next } : {}),
-          ...(sort ? { $orderby: sort } : {}),
-        },
+      const folderData = await getGraphJson(`${requestUrl}${isRoot ? '' : ':'}/children`, accessToken, {
+        $select: 'name,size,id,lastModifiedDateTime,folder,file,video,image',
+        $top: siteConfig.maxItems,
+        ...(next ? { $skipToken: next } : {}),
+        ...(sort ? { $orderby: sort } : {}),
       })
 
       // Extract the pagination token. SharePoint can URL-encode "$skiptoken" in
@@ -287,8 +305,8 @@ export default async function handler(req: NextRequest): Promise<Response> {
       }
     )
   } catch (error: any) {
-    const status = error?.response?.status ?? 500
-    const details = error?.response?.data ?? error?.message ?? 'Internal server error.'
+    const status = error?.status ?? error?.response?.status ?? 500
+    const details = error?.data ?? error?.response?.data ?? error?.message ?? 'Internal server error.'
     console.error('Unable to list items from the configured Microsoft Graph drive.', { status, details })
     return new Response(JSON.stringify({ error: details }), {
       status,
