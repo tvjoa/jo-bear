@@ -1,44 +1,68 @@
 import axios from 'redaxios'
+import type { NextApiRequest, NextApiResponse } from 'next'
 
-import { getAccessToken, getDriveApi } from '.'
+import { encodePath, getAccessToken, getDriveApi } from '.'
 import apiConfig from '../../../config/api.config'
+import siteConfig from '../../../config/site.config'
 import { NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'edge'
+
+/**
+ * Sanitize the search query
+ *
+ * @param query User search query, which may contain special characters
+ * @returns Sanitised query string, which:
+ * - encodes the '<' and '>' characters,
+ * - replaces '?' and '/' characters with ' ',
+ * - replaces ''' with ''''
+ * Reference: https://stackoverflow.com/questions/41491222/single-quote-escaping-in-microsoft-graph.
+ */
+function sanitiseQuery(query: string): string {
+  const sanitisedQuery = query
+    .replace(/'/g, "''")
+    .replace('<', ' &lt; ')
+    .replace('>', ' &gt; ')
+    .replace('?', ' ')
+    .replace('/', ' ')
+  return encodeURIComponent(sanitisedQuery)
+}
 
 export default async function handler(req: NextRequest): Promise<Response> {
   // Get access token from storage
   const accessToken = await getAccessToken()
 
-  // Get item details (specifically, its path) by its unique ID in OneDrive
-  const { id = '' } = Object.fromEntries(req.nextUrl.searchParams)
+  // Query parameter from request
+  const { q: searchQuery = '' } = Object.fromEntries(req.nextUrl.searchParams)
 
   // TODO: Set edge function caching for faster load times
 
-  if (typeof id === 'string') {
-    const idPattern = /^[a-zA-Z0-9]+$/
-    if (!idPattern.test(id)) {
-      // ID contains characters other than letters and numbers
-      return new Response(JSON.stringify({ error: 'Invalid driveItem ID.' }), { status: 400 })
-    }
+  if (typeof searchQuery === 'string') {
+    // Construct Microsoft Graph Search API URL, and perform search only under the base directory
+    const searchRootPath = encodePath('/')
+    const encodedPath = searchRootPath === '' ? searchRootPath : searchRootPath + ':'
 
-    const itemApi = `${await getDriveApi(accessToken)}/items/${id}`
+    const searchApi = `${await getDriveApi(accessToken)}/root${encodedPath}/search(q='${sanitiseQuery(searchQuery)}')`
+
     try {
-      const { data } = await axios.get(itemApi, {
+      const { data } = await axios.get(searchApi, {
         headers: { Authorization: `Bearer ${accessToken}` },
         params: {
-          select: 'id,name,parentReference',
+          select: 'id,name,file,folder,parentReference',
+          top: siteConfig.maxItems,
         },
       })
-      return NextResponse.json(data, {
+      return NextResponse.json(data.value, {
         headers: {
           'Cache-Control': apiConfig.cacheControlHeader,
         },
       })
     } catch (error: any) {
-      return new Response(JSON.stringify({ error: error?.response?.data ?? 'Internal server error.' }), { status: error?.response?.status ?? 500 })
+      return new Response(JSON.stringify({ error: error?.response?.data ?? 'Internal server error.' }), {
+        status: error?.response?.status ?? 500,
+      })
     }
   } else {
-    return new Response(JSON.stringify({ error: 'Invalid driveItem ID.' }), { status: 400 })
+    return NextResponse.json([])
   }
 }
