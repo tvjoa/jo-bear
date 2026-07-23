@@ -243,10 +243,11 @@ export default async function handler(req: NextRequest): Promise<Response> {
         },
       })
 
-      // Extract next page token from full @odata.nextLink
-      const nextPage = folderData['@odata.nextLink']
-        ? folderData['@odata.nextLink'].match(/&\$skiptoken=(.+)/i)[1]
-        : null
+      // Extract the pagination token. SharePoint can URL-encode "$skiptoken" in
+      // @odata.nextLink, which made the previous regular-expression approach throw
+      // a TypeError and return a generic 500 response.
+      const nextLink = folderData['@odata.nextLink']
+      const nextPage = nextLink ? new URL(nextLink).searchParams.get('$skiptoken') : null
 
       // Return paging token if specified
       if (nextPage) {
@@ -278,8 +279,11 @@ export default async function handler(req: NextRequest): Promise<Response> {
       }
     )
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: error?.response?.data ?? 'Internal server error.' }), {
-      status: error?.response?.code ?? 500,
+    const status = error?.response?.status ?? 500
+    const details = error?.response?.data ?? error?.message ?? 'Internal server error.'
+    console.error('Unable to list items from the configured Microsoft Graph drive.', { status, details })
+    return new Response(JSON.stringify({ error: details }), {
+      status,
     })
   }
 }
