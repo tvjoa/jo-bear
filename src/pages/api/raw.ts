@@ -1,8 +1,8 @@
 import { posix as pathPosix } from 'path-browserify'
 import axios from 'redaxios'
 
-import { driveApi, cacheControlHeader } from '../../../config/api.config'
-import { encodePath, getAccessToken, checkAuthRoute } from '.'
+import { cacheControlHeader } from '../../../config/api.config'
+import { encodePath, getAccessToken, checkAuthRoute, getDriveApi } from '.'
 import { NextRequest } from 'next/server'
 
 export const runtime = 'edge'
@@ -48,7 +48,7 @@ export default async function handler(req: NextRequest): Promise<Response> {
 
   try {
     // Handle response from OneDrive API
-    const requestUrl = `${driveApi}/root${encodePath(cleanPath)}`
+    const requestUrl = `${await getDriveApi(accessToken)}/root${encodePath(cleanPath)}`
     const { data } = await axios.get(requestUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
       params: {
