@@ -52,7 +52,10 @@ export function encodePath(path: string): string {
     return ''
   }
   encodedPath = encodedPath.replace(/\/$/, '')
-  return `:${encodeURIComponent(encodedPath)}`
+  // Microsoft Graph path addressing requires the separators to remain literal:
+  // /root:/folder/file. Encode each name individually, but never the '/'.
+  const encodedSegments = encodedPath.split('/').map(encodeURIComponent).join('/')
+  return `:${encodedSegments}`
 }
 
 /**
