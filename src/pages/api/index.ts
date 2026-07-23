@@ -201,7 +201,15 @@ export default async function handler(req: NextRequest): Promise<Response> {
     return new Response(JSON.stringify({ error: 'Sort query invalid.' }), { status: 400 })
   }
 
-  const accessToken = await getAccessToken()
+  let accessToken: string
+  try {
+    accessToken = await getAccessToken()
+  } catch (error: any) {
+    const status = error?.response?.status ?? 500
+    const details = error?.response?.data ?? error?.message ?? 'Unable to retrieve the OAuth token.'
+    console.error('Unable to retrieve or refresh the stored OAuth token.', { status, details })
+    return new Response(JSON.stringify({ error: details }), { status })
+  }
 
   // Return error 403 if access_token is empty
   if (!accessToken) {
