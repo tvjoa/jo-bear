@@ -1,6 +1,6 @@
 import axios from 'redaxios'
 
-import { getAccessToken } from '.'
+import { getAccessToken, getDriveApi } from '.'
 import apiConfig from '../../../config/api.config'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -22,7 +22,7 @@ export default async function handler(req: NextRequest): Promise<Response> {
       return new Response(JSON.stringify({ error: 'Invalid driveItem ID.' }), { status: 400 })
     }
 
-    const itemApi = `${apiConfig.driveApi}/items/${id}`
+    const itemApi = `${await getDriveApi(accessToken)}/items/${id}`
     try {
       const { data } = await axios.get(itemApi, {
         headers: { Authorization: `Bearer ${accessToken}` },
