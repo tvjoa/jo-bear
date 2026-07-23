@@ -3,7 +3,7 @@ import type { OdThumbnail } from '../../types'
 import { posix as pathPosix } from 'path-browserify'
 import axios from 'redaxios'
 
-import { checkAuthRoute, encodePath, getAccessToken } from '.'
+import { checkAuthRoute, encodePath, getAccessToken, getDriveApi } from '.'
 import apiConfig from '../../../config/api.config'
 import { NextRequest } from 'next/server'
 
@@ -47,7 +47,7 @@ export default async function handler(req: NextRequest): Promise<Response> {
 
   const requestPath = encodePath(cleanPath)
   // Handle response from OneDrive API
-  const requestUrl = `${apiConfig.driveApi}/root${requestPath}`
+  const requestUrl = `${await getDriveApi(accessToken)}/root${requestPath}`
   // Whether path is root, which requires some special treatment
   const isRoot = requestPath === ''
 
